@@ -6,7 +6,7 @@ extracted from `@agentkv/client` for reuse across future `agentx402` service SDK
 ## Error handling
 
 `@agentkv/client` re-exports this package's `AgentXError` as `AgentKVError`, so both names refer
-to the same class object and `instanceof AgentKVError` holds across the workspace. This relies on
+to the same class object and `instanceof AgentKVError` holds across the dependency graph. This relies on
 a single resolved copy of `@agentx402-ai/core` — if a downstream project ever resolves two
 incompatible majors of it (e.g. one dependency pinning `^0.1.0` and another `^1.0.0`), each copy's
 `AgentXError` is a distinct class, and `instanceof` checks silently fail across them.
