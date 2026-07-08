@@ -1,0 +1,31 @@
+name: Publish to npm
+
+# Publishes @agentx402-ai/core to npm on a published GitHub Release, using OIDC
+# Trusted Publishing — NO npm token. Provenance attestations emitted automatically.
+#
+# One-time setup: configure a Trusted Publisher at npmjs.com → @agentx402-ai/core →
+# Settings → Trusted Publisher → GitHub Actions → repo "agentx402-ai/core", workflow
+# "publish.yml". Bump the version before cutting the Release.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # required for npm OIDC trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm publish
