@@ -31,9 +31,38 @@ jobs:
           # overwriting itself in-place is what corrupted the bundle on agentkv's
           # first v0.2.0 publish attempt (provenance.js → missing 'sigstore').
           node-version: 24
+          # registry-url IS required — without it npm has no registry configured and
+          # never initiates the OIDC exchange at all (fails ENEEDAUTH). But it makes
+          # setup-node write an .npmrc line
+          #     //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+          # and with no token set (OIDC-only, by design) npm uses that empty placeholder
+          # credential INSTEAD of the OIDC exchange, authenticates as anonymous, and the
+          # registry answers PUT with a misleading `E404 Not Found` rather than a 403.
+          # So: keep registry-url, then delete that one line. See the next step.
+          # Upstream: https://github.com/actions/setup-node/issues/1551
           registry-url: https://registry.npmjs.org
+
+      # Without this, trusted publishing silently never happens. @agentx402-ai/core
+      # 0.1.0 carries NO provenance attestations, which is the tell that OIDC has never
+      # actually succeeded here — the same latent failure found and fixed in
+      # agentx402-ai/agentscout on 2026-07-26. See
+      # executive/runbooks/2026-07-26-npm-trusted-publishing-oidc.md
+      - name: Strip setup-node's placeholder _authToken so npm falls through to OIDC
+        run: |
+          npmrc="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          sed -i '/_authToken/d' "$npmrc"
+          echo "npmrc after strip:"; cat "$npmrc"
+
       - run: npm --version # publish provenance path needs an intact npm bundle
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - run: npm publish
+      - name: Publish (verbose — surfaces the OIDC exchange result)
+        run: |
+          set +e
+          npm publish --provenance --loglevel verbose 2>&1 | tee /tmp/pub.log
+          CODE=${PIPESTATUS[0]}
+          set -e
+          echo "=================== OIDC exchange result ==================="
+          grep -iE "oidc|token/exchange|needauth" /tmp/pub.log || echo "(npm never attempted OIDC — check the npmrc strip step above)"
+          exit $CODE
