@@ -1,6 +1,6 @@
 {
   "name": "@agentx402-ai/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared auth/pay/usage/error/retry plumbing for agentx402 service SDKs (x402 + EIP-712 + EIP-3009 over viem).",
   "license": "MIT",
   "author": "The AgentKV Authors <contact@agentx402.ai>",

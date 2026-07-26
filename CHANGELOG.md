@@ -4,6 +4,21 @@ All notable changes to `@agentx402-ai/core` are documented here. The format foll
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] — 2026-07-26
+
+### Fixed
+- **The package page now links to this repository.** 0.1.0 was published from inside the `agentkv`
+  monorepo, before `core` was extracted into its own repo, so npm recorded
+  `repository: git+https://github.com/agentx402-ai/agentkv.git`. The `repository` field in
+  `package.json` has pointed at `agentx402-ai/core` since this repo's initial commit; published
+  metadata is immutable, so correcting it on npm required a release. No code changes.
+
+### Changed
+- Publish workflow now runs `npm publish` verbosely and prints the OIDC token-exchange result.
+  A trusted-publishing misconfiguration otherwise surfaces as a misleading `E404 Not Found`, which
+  reads as "package missing" rather than "never authenticated" — that ambiguity cost a sibling repo
+  five CI runs to diagnose.
+
 ## [0.1.0] — Initial release
 
 ### Added
