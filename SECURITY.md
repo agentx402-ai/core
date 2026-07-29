@@ -75,7 +75,9 @@ The published tarball is the security boundary that matters most for a money-pat
 
 - **OIDC trusted publishing, no npm token** — nothing long-lived exists to steal — with npm
   **provenance attestations** emitted on every publish. (0.1.0 predates a working OIDC
-  configuration and carries no attestation; 0.1.1 onward do.)
+  configuration and carries no attestation; 0.1.1 onward do.) The Trusted Publisher is bound
+  to this repository, the `publish.yml` workflow, **and** its `release` environment, so a
+  token minted by any other job or a modified copy of that workflow is rejected.
 - **The job holding publishing rights runs no third-party code**: no dependency install, no
   bundler, no test runner, and `npm publish --ignore-scripts`. Install, build, test, and audit run
   in a separate unprivileged job with no `id-token` permission, which hands over only the built

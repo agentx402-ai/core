@@ -162,6 +162,13 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    # LOAD-BEARING, do not remove. The npm Trusted Publisher for @agentx402-ai/core pins
+    # this environment, so the OIDC token's `environment` claim must be `release` or npm
+    # rejects the publish. That is what makes the environment's required reviewer and
+    # tag-only deployment policy an enforced boundary rather than a repo setting: a branch
+    # carrying a modified copy of this workflow with `environment:` stripped out cannot
+    # publish, because its token no longer matches the binding. (Fails closed, so removing
+    # this line breaks releases rather than silently weakening them.)
     environment: release
     permissions:
       contents: read
