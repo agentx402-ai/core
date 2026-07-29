@@ -12,8 +12,10 @@ export interface UsageBlock {
   op: string;
   /**
    * USD ACTUALLY charged for THIS op on the taken path (NOT the list price).
-   * The credit path spends at the 10x discount, so it does NOT equal
-   * `list_price_usd`. A cache hit is a free serve -> `price_usd: 0`.
+   * The credit path spends at the SERVICE's own credit discount — each service
+   * sets its own credit-vs-list ratio (AgentKV's is 10x; it is NOT a
+   * platform-wide constant) — so this does NOT equal `list_price_usd`.
+   * A cache hit is a free serve -> `price_usd: 0`.
    */
   price_usd: number;
   /**

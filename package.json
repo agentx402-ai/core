@@ -1,6 +1,6 @@
 {
   "name": "@agentx402-ai/core",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Shared auth/pay/usage/error/retry plumbing for agentx402 service SDKs (x402 + EIP-712 + EIP-3009 over viem).",
   "license": "MIT",
   "author": "The AgentKV Authors <contact@agentx402.ai>",
@@ -38,13 +38,16 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "tsup",
+    "prepack": "npm run build",
+    "smoke": "node test/dist-smoke.mjs",
     "test": "tsc --noEmit && vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -65,10 +68,7 @@
     "typescript": "^5.6.0",
     "vitest": "^4.1.0"
   },
-  "overrides": {
-    "ws": "^8.21.0"
-  },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.3"
   }
 }

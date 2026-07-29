@@ -8,13 +8,22 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # engines floor is 20.3 (AbortSignal.any); 22/24 cover current LTS + latest.
+        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
       - run: npm run lint
       - run: npm run build
-      - run: npm test
+      # Post-build dist smoke: both module formats load, exports map resolves, and the
+      # cross-format instanceof brand holds — an exports-map/tsup regression fails here,
+      # not in consumers.
+      - run: npm run smoke
+      - run: npm run typecheck
+      - run: npm run test:coverage
