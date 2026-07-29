@@ -1,0 +1,24 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+    ignore:
+      # TypeScript 7 is a full rewrite whose compiler internals the bundler reads, so a
+      # major bump breaks `npm run build`. Adopt TS majors deliberately, upgrading the
+      # build toolchain in the same PR — minor and patch updates still flow normally.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # The publish workflow runs with npm trusted-publishing rights, so its actions are
+  # SHA-pinned (see .github/workflows/*.yml). Pins only stay safe if they stay current:
+  # this is what keeps them moving.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

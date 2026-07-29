@@ -5,20 +5,34 @@ on:
     branches: [main]
   pull_request:
 
+# Deny by default. This repo's default workflow-token setting is already read-only, but
+# that is a mutable repo setting; pinning it here means a flip of that setting cannot
+# silently widen what a CI run can do.
+permissions: {}
+
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         # engines floor is 20.3 (AbortSignal.any); 22/24 cover current LTS + latest.
         node-version: [20, 22, 24]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      # Actions are pinned to full commit SHAs, not mutable tags: a moved or compromised
+      # tag would otherwise execute attacker code in CI, and this repo's publish workflow
+      # shares the same action set. Dependabot (.github/dependabot.yml) bumps these.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      - run: npm ci
+      # --ignore-scripts mirrors the publish workflow: nothing here needs an install
+      # script, so nothing gets arbitrary execution merely from being installed.
+      - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run build
       # Post-build dist smoke: both module formats load, exports map resolves, and the
@@ -27,3 +41,13 @@ jobs:
       - run: npm run smoke
       - run: npm run typecheck
       - run: npm run test:coverage
+      # This is the HARD full-tree gate: a high-severity advisory anywhere — including the
+      # dev chain that builds the published artifact — fails CI, where it is fixable on a
+      # branch. publish.yml deliberately downgrades the second of these to a warning so a
+      # late dev-chain advisory cannot strand an already-tagged release.
+      # (`--audit-level` sets only the exit-code threshold; the report still lists
+      # everything, so low/moderate findings stay visible in the log.)
+      - name: Audit
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit --audit-level=high

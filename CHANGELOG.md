@@ -76,11 +76,35 @@ minor (0.x) so consumers floating `^0.1.x` are not auto-upgraded.
 ### Packaging
 
 - `prepack` builds `dist/` (a publish from a stale checkout can no longer pack an empty
-  API surface); `CHANGELOG.md` ships in the tarball; the inert `overrides.ws` was removed.
+  API surface); `CHANGELOG.md` and `SECURITY.md` ship in the tarball; the inert
+  `overrides.ws` was removed.
 - CI: Node 20/22/24 matrix, coverage wired, and a post-build dist import smoke.
 - Lint: `noExplicitAny`/`noNonNullAssertion`/`noUnusedFunctionParameters` re-enabled
   repo-wide as errors, with the one intentional structural `any` (viem's generic
   `signTypedData`) explicitly annotated.
+
+### Release integrity
+
+Hardening of the pipeline that produces the published tarball — relevant to anyone
+depending on a package that signs USDC authorizations. See `SECURITY.md`.
+
+- **The job holding npm trusted-publishing rights now runs no third-party code**: no
+  dependency install, no bundler, no test runner, and `npm publish --ignore-scripts`.
+  Install/build/test/audit moved to a separate unprivileged job with no `id-token`
+  permission that hands over only the built `dist/`, which the publish job verifies.
+- Installs use `--ignore-scripts` in CI and release, so a compromised transitive
+  dependency gets no execution merely from being installed.
+- GitHub Actions are pinned to commit SHAs rather than mutable tags, with Dependabot
+  configured to keep the pins current; both workflows declare least-privilege
+  `permissions` and check out with `persist-credentials: false`.
+- A tag↔version guard refuses to publish unless the tag being released matches
+  `package.json` at that tag; the tag's commit is always what gets built and published,
+  never branch HEAD. The `release` environment now requires a human reviewer, and a
+  prerelease tag publishes under the `next` dist-tag so it can never take `latest`.
+- A high-severity `npm audit` finding in a runtime dependency blocks CI and release; one
+  in the dev/build chain blocks CI, where it is still fixable on a branch. The one
+  outstanding advisory (`esbuild` GHSA-g7r4-m6w7-qqqr, low, dev-only) is cleared by an
+  `overrides` pin to `esbuild@^0.28.1`; a `SECURITY.md` reporting policy is now published.
 
 ## [0.1.1] — 2026-07-26
 

@@ -6,25 +6,172 @@ name: Publish to npm
 # One-time setup: configure a Trusted Publisher at npmjs.com → @agentx402-ai/core →
 # Settings → Trusted Publisher → GitHub Actions → repo "agentx402-ai/core", workflow
 # "publish.yml". Bump the version before cutting the Release.
+#
+# SUPPLY-CHAIN SHAPE. The `publish` job below holds this package's npm trusted-publishing
+# rights: any code executing inside it can mint an OIDC token and publish an arbitrary
+# tarball as a money-path SDK. So it runs NO third-party code: no `npm ci`, no bundler, no
+# test runner, and `npm publish --ignore-scripts` so no lifecycle script fires either
+# (`prepack` would otherwise invoke tsup). Everything that executes dependency code —
+# install, lint, build, test, audit — happens in the unprivileged `build` job, which has no
+# `id-token` permission and hands over only the built `dist/`.
+#   SCOPE OF THAT CLAIM: this protects the publishing CREDENTIAL, not payload integrity.
+#   `dist/` is still produced by tsup/esbuild in the build job, so a compromised build
+#   dependency can still get its output published — with a valid provenance attestation
+#   saying so. That is inherent to any build-then-publish split; the audit gate, the
+#   lockfile, `--ignore-scripts`, and SHA-pinned actions are what narrow it.
+# Splitting into two JOBS (not two workflow files) keeps the OIDC `workflow_ref` claim and
+# the `environment:release` subject identical, so the npm Trusted Publisher binding is
+# unaffected.
+#
+# RECOVERY — and why this workflow only ever runs FROM THE TAG it publishes.
+# npm builds its SLSA provenance attestation from GITHUB_REF and GITHUB_SHA, NOT from what
+# was checked out (libnpmpublish/lib/provenance.js reads them straight from the env, with no
+# consistency check against the working tree). So a "dispatch from main, publish tag v0.2.0"
+# recovery path would ship the tag's code under an attestation naming main's HEAD — a false
+# attestation, in exactly the trust property this OIDC setup exists to provide. Hence:
+#   - Transient failure (registry blip, network): "Re-run all jobs" on the failed run, or
+#         gh workflow run publish.yml --ref v0.2.0
+#     Both keep GITHUB_REF on the tag, so provenance stays truthful.
+#   - A BUG IN THIS WORKFLOW baked into a tag cannot be fixed by re-running it: a run always
+#     executes the workflow file at the ref it runs from. Move the tag onto a commit carrying
+#     both the fixed workflow and the matching package.json version, then delete and
+#     re-publish the Release — or just cut the next version, which is what 0.1.1 did.
 
 on:
   release:
     types: [published]
-  # Manual re-run path: a release-event rerun reuses the workflow file snapshotted
-  # at the tag's commit, so a fixed workflow on main needs its own trigger.
+  # Manual re-run path. MUST be dispatched from the tag (`--ref vX.Y.Z`); a branch dispatch
+  # is refused below, and by the `release` environment's tag-only deployment policy.
   workflow_dispatch:
 
-permissions:
-  contents: read
-  id-token: write # required for npm OIDC trusted publishing
+# Deny by default; each job opts into exactly the scopes it needs.
+# No `concurrency` group here on purpose: a run held in `Waiting` for the environment's
+# required reviewer would hold that group for up to 30 days, blocking any other release from
+# even starting — and with the default queue depth of 1, a third arrival silently CANCELS the
+# pending one (reported as `cancelled`, so no failure notification). npm already rejects a
+# duplicate version, which is the race a group would have guarded against.
+permissions: {}
 
 jobs:
+  # Unprivileged: this is where every line of third-party code runs.
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      ref: ${{ steps.resolve.outputs.ref }}
+      npm_tag: ${{ steps.resolve.outputs.npm_tag }}
+    steps:
+      # Runs BEFORE checkout so nothing unvalidated reaches `ref:`.
+      # GITHUB_REF is matched, not GITHUB_REF_NAME, because REF_NAME strips `refs/heads/`
+      # and `refs/tags/` identically — a BRANCH named `v0.2.0` would otherwise satisfy a
+      # shape check on the name alone. This is also what refuses a branch dispatch.
+      - name: Resolve and validate the tag being published
+        id: resolve
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          case "$REF" in
+            refs/tags/*) TAG="${REF#refs/tags/}" ;;
+            *)
+              echo "::error::Refusing to publish: '$REF' is not a tag ref."
+              echo "A manual re-run must be dispatched FROM THE TAG: gh workflow run publish.yml --ref vX.Y.Z"
+              exit 1
+              ;;
+          esac
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Refusing to publish: '$TAG' is not a vX.Y.Z[-prerelease] release tag."
+            exit 1
+          fi
+          # A prerelease published without an explicit dist-tag is rejected outright by
+          # npm ("You must specify a tag using --tag when publishing a prerelease
+          # version") — which would burn the release approval and fail at the last step.
+          # Derive it here so an RC goes to `next` and can never take `latest`.
+          case "${TAG#v}" in
+            *-*) NPM_TAG=next ;;
+            *) NPM_TAG=latest ;;
+          esac
+          printf 'tag=%s\n' "$TAG" >> "$GITHUB_OUTPUT"
+          # Fully qualified: a bare "v0.2.0" would be ambiguous if a BRANCH of that name
+          # also existed, and checkout would be free to resolve it to the branch.
+          printf 'ref=refs/tags/%s\n' "$TAG" >> "$GITHUB_OUTPUT"
+          printf 'npm_tag=%s\n' "$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "resolved $TAG → npm dist-tag '$NPM_TAG'"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Explicit and fully qualified, rather than relying on the default checkout, so
+          # what gets built is unambiguously the tag named in the provenance attestation.
+          ref: ${{ steps.resolve.outputs.ref }}
+          # Don't leave the job token in .git/config where a build step could reach it.
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      # A GitHub Release tagged v0.2.0 cut on a commit still carrying 0.1.2 would
+      # otherwise publish 0.1.2 under that Release.
+      - name: Guard — package.json at this tag must match the tag
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::Refusing to publish: tag is $TAG but package.json is $VERSION."
+            exit 1
+          fi
+          echo "tag/version guard OK — publishing $VERSION"
+
+      # --ignore-scripts: a compromised transitive dep must not get arbitrary execution
+      # just from being installed. Nothing here needs an install script — the platform
+      # binaries (esbuild, biome) arrive via optionalDependencies, and the build is tsup.
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run smoke # dist loads in both module formats before it can be published
+      - run: npm test
+
+      # Consumers must never inherit a known-vulnerable runtime dep — that gate is hard,
+      # deliberately: a new advisory against viem/@x402/* blocks an already-tagged release,
+      # and recovery is to fix the lockfile and cut the next version. That is the intended
+      # trade. The full-tree gate is NOT hard here, because a dev-chain advisory carries no
+      # consumer exposure and would otherwise strand a tag for a build-only dependency.
+      # ci.yml holds the hard full-tree gate, where it is fixable on a branch.
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm audit --audit-level=high || echo "::warning::dev-chain advisories present — see ci.yml for the blocking gate"
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          # v4+ artifacts are immutable and a re-run keeps the same run id, so without
+          # this "Re-run all jobs" — the primary recovery from a transient publish
+          # failure — dies on a 409 conflict.
+          overwrite: true
+          # Must cover the FULL time a release can sit awaiting the environment's required
+          # reviewer: GitHub holds it for up to 30 days. Any shorter and an approval that
+          # lands after expiry fails at download-artifact with the approval already spent.
+          retention-days: 30
+
+  # Privileged: holds npm trusted-publishing rights. Executes no dependency code.
   publish:
+    needs: build
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      contents: read
+      id-token: write # required for npm OIDC trusted publishing
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.build.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           # Node 24 bundles npm >= 11.5.1 (required for OIDC trusted publishing)
           # NATIVELY. Do not reintroduce `npm install -g npm@latest`: npm
@@ -45,7 +192,7 @@ jobs:
       # Without this, trusted publishing silently never happens. @agentx402-ai/core
       # 0.1.0 carries NO provenance attestations, which is the tell that OIDC has never
       # actually succeeded here — the same latent failure found and fixed in
-      # agentx402-ai/agentscout on 2026-07-26. See
+      # agentx402-ai/agentscout on 2026-07-26. (0.1.1 onward do carry them.) See
       # executive/runbooks/2026-07-26-npm-trusted-publishing-oidc.md
       - name: Strip setup-node's placeholder _authToken so npm falls through to OIDC
         run: |
@@ -54,13 +201,42 @@ jobs:
           echo "npmrc after strip:"; cat "$npmrc"
 
       - run: npm --version # publish provenance path needs an intact npm bundle
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: dist
+          path: dist/
+
+      # This job, not the build job, is the one holding publishing rights, so it must
+      # independently refuse a mismatched ref rather than trusting an upstream check.
+      - name: Guard — re-verify tag matches package.json before publishing
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION="v$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::Refusing to publish: tag is $TAG but package.json is $VERSION."
+            exit 1
+          fi
+
+      # `dist/` came over the wire from another job, and nothing is installed here to
+      # rebuild it — so verify the payload is a complete build before it becomes a
+      # published version. --ignore-scripts because prepack would invoke tsup.
+      - name: Verify the downloaded artifact is a complete build
+        run: |
+          set -euo pipefail
+          for f in dist/index.js dist/index.cjs dist/index.d.ts dist/index.d.cts; do
+            [ -s "$f" ] || { echo "::error::missing or empty $f in the build artifact"; exit 1; }
+          done
+          npm pack --dry-run --ignore-scripts
+
       - name: Publish (verbose — surfaces the OIDC exchange result)
+        env:
+          NPM_TAG: ${{ needs.build.outputs.npm_tag }}
         run: |
           set +e
-          npm publish --provenance --loglevel verbose 2>&1 | tee /tmp/pub.log
+          npm publish --provenance --ignore-scripts --tag "$NPM_TAG" --loglevel verbose 2>&1 | tee /tmp/pub.log
           CODE=${PIPESTATUS[0]}
           set -e
           echo "=================== OIDC exchange result ==================="
