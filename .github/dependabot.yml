@@ -14,6 +14,13 @@ updates:
       # build toolchain in the same PR — minor and patch updates still flow normally.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # @types/node must track the `engines` FLOOR (>=20.3), not the newest Node. These
+      # types are what tsc checks the code against, so a v26 major would happily compile a
+      # call to an API that does not exist on the oldest Node this package claims to
+      # support — shipping a runtime failure that typechecked clean. Raise this only
+      # together with `engines`, in the same PR; minor and patch updates still flow.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # The publish workflow runs with npm trusted-publishing rights, so its actions are
   # SHA-pinned (see .github/workflows/*.yml). Pins only stay safe if they stay current:

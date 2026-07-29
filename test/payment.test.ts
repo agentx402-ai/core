@@ -411,17 +411,15 @@ describe("payment challenge taxonomy — malformed/hostile challenges throw type
     });
   });
 
-  it.each([
-    [1],
-    ["banana"],
-    [2.5],
-    [undefined],
-  ])("x402Version %s (not the integer 2) -> invalid_challenge", async (version) => {
-    const c = btoa(JSON.stringify({ x402Version: version, accepts: [] }));
-    await expect(buildPaymentHeader(account, c, PINNED)).rejects.toMatchObject({
-      code: "invalid_challenge",
-    });
-  });
+  it.each([[1], ["banana"], [2.5], [undefined]])(
+    "x402Version %s (not the integer 2) -> invalid_challenge",
+    async (version) => {
+      const c = btoa(JSON.stringify({ x402Version: version, accepts: [] }));
+      await expect(buildPaymentHeader(account, c, PINNED)).rejects.toMatchObject({
+        code: "invalid_challenge",
+      });
+    },
+  );
 
   it("garbage payTo -> invalid_challenge (no raw viem InvalidAddressError escape)", async () => {
     const signer = neverSigner(account.address);
@@ -652,17 +650,14 @@ describe("payment.challengePriceUsd", () => {
     ).toThrowError(expect.objectContaining({ code: "asset_mismatch" }));
   });
 
-  it.each([
-    ["-5000000"],
-    ["1e6"],
-    ["abc"],
-    [" 5000000 "],
-    ["0x10"],
-  ])("rejects malformed challenge amount %s with invalid_challenge (no NaN/misprice escape)", (amount) => {
-    expect(() => challengePriceUsd(challengeWith({ amount }), undefined, NETWORK)).toThrowError(
-      expect.objectContaining({ code: "invalid_challenge" }),
-    );
-  });
+  it.each([["-5000000"], ["1e6"], ["abc"], [" 5000000 "], ["0x10"]])(
+    "rejects malformed challenge amount %s with invalid_challenge (no NaN/misprice escape)",
+    (amount) => {
+      expect(() => challengePriceUsd(challengeWith({ amount }), undefined, NETWORK)).toThrowError(
+        expect.objectContaining({ code: "invalid_challenge" }),
+      );
+    },
+  );
 });
 
 describe("payment window clamp — MAX_AUTH_WINDOW_SEC is the unconditional bearer-instrument bound", () => {
