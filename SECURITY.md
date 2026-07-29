@@ -88,10 +88,10 @@ The published tarball is the security boundary that matters most for a money-pat
 - **Installs use `--ignore-scripts`** in CI and release, so a compromised transitive dependency
   gains no execution merely from being installed.
 - **Actions are pinned to commit SHAs**, not mutable tags, and Dependabot keeps those pins current.
-- **A tag↔version guard** refuses to publish unless the release tag matches `package.json`; the
-  `release` environment restricts deployments to `v*` tags and requires a human reviewer. A
-  release always builds and publishes the tag's own commit, so the provenance attestation names
-  the commit the shipped code actually came from.
+- **A tag↔version guard** refuses to publish unless the release tag matches `package.json`, and
+  the `release` environment restricts deployments to `v*` tags. A release always builds and
+  publishes the tag's own commit, so the provenance attestation names the commit the shipped
+  code actually came from.
 - **A high-severity `npm audit` finding in a runtime dependency blocks both CI and release**; one
   in the dev/build chain blocks CI, where it can still be fixed on a branch.
 

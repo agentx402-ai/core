@@ -99,7 +99,7 @@ depending on a package that signs USDC authorizations. See `SECURITY.md`.
   `permissions` and check out with `persist-credentials: false`.
 - A tag↔version guard refuses to publish unless the tag being released matches
   `package.json` at that tag; the tag's commit is always what gets built and published,
-  never branch HEAD. The `release` environment now requires a human reviewer, and a
+  never branch HEAD. The `release` environment now restricts deployments to `v*` tags, and a
   prerelease tag publishes under the `next` dist-tag so it can never take `latest`.
 - A high-severity `npm audit` finding in a runtime dependency blocks CI and release; one
   in the dev/build chain blocks CI, where it is still fixable on a branch. The one
