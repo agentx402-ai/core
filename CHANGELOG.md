@@ -4,7 +4,7 @@ All notable changes to `@agentx402-ai/core` are documented here. The format foll
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [0.2.0] — Unreleased
+## [0.2.0] — 2026-07-29
 
 Money-path hardening release: the safety pins become safe-by-default, the untrusted
 challenge gets a typed error taxonomy, and the retry layer's cancellation/classification
@@ -141,5 +141,6 @@ The shared x402/EIP-712 platform SDK for agentx402 services:
 Extracted from the `agentkv` monorepo into its own repo so it can be versioned and consumed
 independently by `@agentkv/client`, `@agentkv/cli`, and future agentx402 services.
 
+[0.2.0]: https://github.com/agentx402-ai/core/releases/tag/v0.2.0
 [0.1.1]: https://github.com/agentx402-ai/core/releases/tag/v0.1.1
 [0.1.0]: https://github.com/agentx402-ai/core/releases/tag/v0.1.0
