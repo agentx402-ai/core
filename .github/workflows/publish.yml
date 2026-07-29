@@ -185,26 +185,35 @@ jobs:
           # first v0.2.0 publish attempt (provenance.js → missing 'sigstore').
           node-version: 24
           # registry-url IS required — without it npm has no registry configured and
-          # never initiates the OIDC exchange at all (fails ENEEDAUTH). But it makes
-          # setup-node write an .npmrc line
+          # never initiates the OIDC exchange at all (fails ENEEDAUTH). Historically it
+          # ALSO made setup-node write an .npmrc line
           #     //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
-          # and with no token set (OIDC-only, by design) npm uses that empty placeholder
-          # credential INSTEAD of the OIDC exchange, authenticates as anonymous, and the
-          # registry answers PUT with a misleading `E404 Not Found` rather than a 403.
-          # So: keep registry-url, then delete that one line. See the next step.
-          # Upstream: https://github.com/actions/setup-node/issues/1551
+          # and with no token set (OIDC-only, by design) npm used that empty placeholder
+          # credential INSTEAD of the OIDC exchange, authenticated as anonymous, and the
+          # registry answered PUT with a misleading `E404 Not Found` rather than a 403.
+          # setup-node v7 fixes that upstream ("Remove dummy NODE_AUTH_TOKEN export",
+          # actions/setup-node#1558, closing #1551), so the next step is now a no-op —
+          # kept as a belt-and-braces guard because a silent regression here costs a
+          # release and reads as "package missing" rather than "never authenticated".
           registry-url: https://registry.npmjs.org
 
-      # Without this, trusted publishing silently never happens. @agentx402-ai/core
-      # 0.1.0 carries NO provenance attestations, which is the tell that OIDC has never
-      # actually succeeded here — the same latent failure found and fixed in
+      # @agentx402-ai/core 0.1.0 carries NO provenance attestations, which is the tell
+      # that OIDC never succeeded here — the same latent failure found and fixed in
       # agentx402-ai/agentscout on 2026-07-26. (0.1.1 onward do carry them.) See
       # executive/runbooks/2026-07-26-npm-trusted-publishing-oidc.md
-      - name: Strip setup-node's placeholder _authToken so npm falls through to OIDC
+      # Tolerant of BOTH setup-node generations: v6 writes the placeholder (strip it),
+      # v7 does not (nothing to strip). A bare `sed -i` would fail the job outright if
+      # v7 ever stops writing the file at all, so the existence check is load-bearing.
+      - name: Strip any placeholder _authToken so npm falls through to OIDC
         run: |
+          set -euo pipefail
           npmrc="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
-          sed -i '/_authToken/d' "$npmrc"
-          echo "npmrc after strip:"; cat "$npmrc"
+          if [ -f "$npmrc" ]; then
+            sed -i '/_authToken/d' "$npmrc"
+            echo "npmrc after strip:"; cat "$npmrc"
+          else
+            echo "no npmrc at $npmrc — nothing to strip"
+          fi
 
       - run: npm --version # publish provenance path needs an intact npm bundle
 
