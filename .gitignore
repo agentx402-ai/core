@@ -16,3 +16,9 @@ coverage/
 # editor / OS
 .DS_Store
 *.log
+
+# Generated (graphify knowledge graph): regenerable via `graphify update .`.
+# Kept out of this public repo; regenerate locally as needed.
+# No trailing slash on purpose — `graphify-out/` would match only a directory and
+# leave a symlinked graphify-out tracked; the bare name matches both.
+graphify-out
