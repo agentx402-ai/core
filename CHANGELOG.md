@@ -4,6 +4,40 @@ All notable changes to `@agentx402-ai/core` are documented here. The format foll
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-07-31
+
+Shared money-safety plumbing. Both service SDKs carried their own copy of the spend bound and
+the error-body parser, under different names for the same function, and both had drifted — a
+cross-repo audit found a concurrency hole in one client's cumulative cap and a missing
+fail-closed check in the other, and the error parser drifted again during that remediation.
+Core already owned `SpendCapError` while the logic that throws it lived downstream; this puts
+them together. Additive — no existing export changes.
+
+### Added
+
+- **`SpendLedger`** — per-call and cumulative spend bounds, with the synchronous reservation
+  that makes the cumulative bound hold under concurrency. Settlement is only known after a paid
+  round-trip, so a ledger counting only settled spend gives concurrent ops the same stale total:
+  each checks, each passes, each signs. Callers reserve at the check and release when the op
+  settles or fails; the release is idempotent. Caps are validated at construction.
+- **`assertFiniteUsd`** — a malformed cap fails closed. The dangerous value is `NaN`: `usd > NaN`
+  is false, so an unchecked NaN cap does not merely fail to bind, it silently disables the
+  comparison while still reading as configured.
+- **`parseErrorBody`** — parses a worker's `{ error, code, hint }` failure body, type-checking
+  every field because `JSON.parse` returns `any` and a cast asserts nothing at runtime. A
+  non-string `code` would silently break every `e.code === "…"` comparison callers dispatch on.
+  Only the parsing is shared; each SDK still constructs its own error class, since that identity
+  is what callers `instanceof`.
+
+### Fixed
+
+- **A spend landing exactly on a cumulative cap is no longer refused.** Cumulative spend
+  accumulates USD float error — `$0.005` settled plus a `$0.004` op is `0.009000000000000001` —
+  so a bare `<=` refused a spend that exactly reached a `$0.009` cap. `SpendLedger` absorbs that
+  with roughly one atomic USDC of slack, the same magnitude already applied to a quoted per-op
+  price, so it cannot admit a spend anyone could actually be charged. This defect is present in
+  both service SDKs' own cap arithmetic and is fixed for them as they adopt this.
+
 ## [0.2.0] — 2026-07-29
 
 Money-path hardening release: the safety pins become safe-by-default, the untrusted

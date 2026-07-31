@@ -84,6 +84,47 @@ function brandedHasInstance(
   };
 }
 
+/** The service-error fields every worker on this platform returns. */
+export interface ParsedErrorBody {
+  /** Human-readable failure text — the body's `error`, else the caller's fallback label. */
+  detail: string;
+  /** Machine code callers dispatch on. `request_failed` when the body carries none. */
+  code: string;
+  /** The actionable half, when the service supplied one. */
+  hint?: string;
+}
+
+/**
+ * Parse a worker's `{ error, code, hint }` failure body. Each service SDK wraps the result in
+ * its OWN error class — that class identity is what callers `instanceof` — so only the parsing
+ * is shared, not the construction.
+ *
+ * EVERY FIELD IS TYPE-CHECKED because the body is untrusted: `JSON.parse` returns `any` and a
+ * cast asserts nothing at runtime. A non-string `code` would silently break every
+ * `e.code === "…"` comparison callers branch on, and a non-string `hint` renders as
+ * "[object Object]" wherever it is surfaced. Anything that is not a non-empty string falls back
+ * to the defaults. A non-JSON body is not an error here — it yields the fallback label and
+ * `request_failed`, which is what a proxy's HTML error page should look like to a caller.
+ *
+ * `hint` matters more than it looks: these workers put the GENERIC message in `error` and the
+ * ACTIONABLE detail in `hint`, so dropping it leaves callers with only the canned string. Both
+ * client SDKs did exactly that until 2026-07-31, one of them for its whole published life.
+ */
+export function parseErrorBody(bodyText: string, fallback: string): ParsedErrorBody {
+  let detail = fallback;
+  let code = "request_failed";
+  let hint: string | undefined;
+  try {
+    const body = JSON.parse(bodyText) as { error?: unknown; code?: unknown; hint?: unknown };
+    if (typeof body?.error === "string" && body.error) detail = body.error;
+    if (typeof body?.code === "string" && body.code) code = body.code;
+    if (typeof body?.hint === "string" && body.hint) hint = body.hint;
+  } catch {
+    /* non-JSON body — keep the fallback label + request_failed */
+  }
+  return hint === undefined ? { detail, code } : { detail, code, hint };
+}
+
 Object.defineProperty(AgentXError, Symbol.hasInstance, {
   value: brandedHasInstance(AgentXError, AGENTX_ERROR_BRAND),
 });
