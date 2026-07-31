@@ -165,3 +165,25 @@ describe("SpendLedger — float accumulation must not refuse an at-cap spend", (
     expect(() => l.assertSpend(0.005 + 0.00001)).toThrow(SpendCapError); // 10x it: refused
   });
 });
+
+describe("SpendLedger — bypassPerCallCap narrows one bound, never both", () => {
+  // A credit purchase is not a per-op charge: maxSpendUsd bounds what one operation may cost,
+  // and pre-buying $20 of credit is not a $20 operation.
+  it("skips the per-call cap for a deposit", () => {
+    const l = new SpendLedger({ maxSpendUsd: 0.005 });
+    expect(() => l.assertSpend(20)).toThrow(SpendCapError);
+    expect(() => l.assertSpend(20, { bypassPerCallCap: true })).not.toThrow();
+  });
+
+  it("still enforces the CUMULATIVE cap — real money still leaves the wallet", () => {
+    const l = new SpendLedger({ maxSpendUsd: 0.005, maxSessionSpendUsd: 10 });
+    expect(() => l.assertSpend(20, { bypassPerCallCap: true })).toThrow(SpendCapError);
+  });
+
+  it("threads through assertAndReserve", () => {
+    const l = new SpendLedger({ maxSpendUsd: 0.005, maxSessionSpendUsd: 100 });
+    const release = l.assertAndReserve(20, { bypassPerCallCap: true });
+    expect(l.inFlight).toBe(20);
+    release();
+  });
+});

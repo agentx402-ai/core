@@ -41,6 +41,17 @@ export function assertFiniteUsd(value: unknown, label: string): void {
   }
 }
 
+/** Per-check options for {@link SpendLedger.assertSpend}. */
+export interface SpendCheckOptions {
+  /**
+   * Skip the PER-CALL cap for this amount. For a credit purchase (a deposit or top-off),
+   * which is not a per-op charge: `maxSpendUsd` bounds what a single operation may cost, and
+   * pre-buying $20 of credit is not a $20 operation. The CUMULATIVE cap still applies — real
+   * money still leaves the wallet — so this narrows one bound, never both.
+   */
+  bypassPerCallCap?: boolean;
+}
+
 /** Bounds a {@link SpendLedger}. Both are optional; an absent bound is "no cap". */
 export interface SpendLedgerOptions {
   /** Ceiling on any single paying op's server-quoted price. */
@@ -95,8 +106,12 @@ export class SpendLedger {
    * validated upstream, so this is hardening rather than a reachable hole — but it is the
    * last arithmetic before a signature, so it refuses rather than trusts.
    */
-  assertSpend(usd: number): void {
-    if (this.maxSpendUsd !== undefined && !(usd <= this.maxSpendUsd + USD_EPS)) {
+  assertSpend(usd: number, opts: SpendCheckOptions = {}): void {
+    if (
+      !opts.bypassPerCallCap &&
+      this.maxSpendUsd !== undefined &&
+      !(usd <= this.maxSpendUsd + USD_EPS)
+    ) {
       throw new SpendCapError(`spend $${usd} exceeds per-call cap $${this.maxSpendUsd}`);
     }
     if (
@@ -130,8 +145,8 @@ export class SpendLedger {
    * {@link assertSpend} + {@link reserve}, for a path about to commit real money. Nothing may
    * `await` between the two, or the check it just passed is stale before the reservation lands.
    */
-  assertAndReserve(usd: number): () => void {
-    this.assertSpend(usd);
+  assertAndReserve(usd: number, opts: SpendCheckOptions = {}): () => void {
+    this.assertSpend(usd, opts);
     return this.reserve(usd);
   }
 
