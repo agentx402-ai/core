@@ -8,4 +8,5 @@ export * from "./errors";
 export * from "./idempotency";
 export * from "./payment";
 export * from "./retry";
+export * from "./spend";
 export * from "./usage";
