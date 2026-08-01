@@ -26,4 +26,18 @@ export interface UsageBlock {
   /** Prepaid credits debited from the ledger for this op (0 on the x402 pay-per-op path). */
   credits_charged: number;
   cache_hit?: boolean;
+  /**
+   * Composite-op itemization: additional charge legs beyond the primary verb
+   * (e.g. an AgentRAG ask that also ingested pages). The top-level `price_usd`
+   * is the PRIMARY verb's price on the taken path; the request's total cost is
+   * `price_usd` + the sum of `breakdown[].price_usd`. Absent on single-leg ops
+   * — never an empty array on the wire.
+   */
+  breakdown?: Array<{ op: string; units: number; price_usd: number }>;
+  /**
+   * Present (always literal `true`, never `false`) when the collection named
+   * by this response is inside the final 24h of its lifetime — the caller's
+   * cue to query it (sliding the expiry) or extend it. Omitted otherwise.
+   */
+  expiring_soon?: true;
 }
