@@ -4,6 +4,31 @@ All notable changes to `@agentx402-ai/core` are documented here. The format foll
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-08-02
+
+Mirrors two `UsageBlock` fields the platform already emits. Both are optional and additive — no
+existing export changes, and a client on 0.3.0 keeps working against a service that sends them.
+Releasing them matters because a client cannot read a field its own types do not declare: AgentRAG
+emits both today, so without this release every consumer has to widen the type by hand.
+
+### Added
+
+- **`breakdown`** — composite-op itemization, for responses whose charge has more than one leg
+  (an AgentRAG `ask` that also ingested pages). The top-level `price_usd` remains the **primary**
+  verb's price on the taken path, so a request's total is `price_usd` plus the sum of
+  `breakdown[].price_usd` — the two are not alternatives and adding them is not double-counting.
+  Absent on single-leg ops rather than an empty array, so `breakdown?.length` is never `0`.
+
+- **`expiring_soon`** — present as literal `true` when the collection named by the response is
+  inside the final 24 hours of its lifetime, omitted otherwise. Never `false`, so the only correct
+  test is presence. It is the caller's cue to extend the collection (or, for AgentRAG, to run a
+  matching ask, which slides the expiry) before it is lost.
+
+### Fixed
+
+- `package-lock.json` carried `0.2.0` while `package.json` was at `0.3.0` — a drift introduced at
+  the 0.3.0 release. Both now move together.
+
 ## [0.3.0] — 2026-07-31
 
 Shared money-safety plumbing. Both service SDKs carried their own copy of the spend bound and
