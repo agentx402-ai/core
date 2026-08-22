@@ -4,6 +4,20 @@ All notable changes to `@agentx402-ai/core` are documented here. The format foll
 [Keep a Changelog](https://keepachangelog.com/), and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] — 2026-08-22
+
+Adopts `@x402/core` + `@x402/evm` 2.23.0, which renamed the asset-registry token field
+`address` → `asset` (`DefaultAsset.asset`, "asset id as advertised in payment requirements" —
+the token's 0x address on EVM). `assertNetworkParity` reads that field to pin the challenge's
+asset to the canonical USDC contract; it now reads `.asset`. This is an internal fix — **no
+public export changes** — but consumers of `0.4.1` now resolve `@x402` at `>= 2.23.0`, so a
+service SDK still reading the old `.address` shape must upgrade to this release before bumping
+its own `@x402` past 2.22.0. The canonical-USDC asset-parity test verifies the pin is unchanged.
+
+Also refreshes tooling/deps: `viem` 2.55.19, `@biomejs/biome` 2.5.10, `vitest` +
+`@vitest/coverage-v8` 4.1.11, and an `overrides` pin of `nanoid` to `^3.3.18` to clear a
+high-severity transitive advisory (dev-only, via `tsup`).
+
 ## [0.4.0] — 2026-08-02
 
 Mirrors two `UsageBlock` fields the platform already emits. Both are optional and additive — no
