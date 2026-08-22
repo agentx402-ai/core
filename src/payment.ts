@@ -267,8 +267,11 @@ function assertNetworkParity(req: ChallengeAccept, expectedNetwork: string): voi
       0,
     );
   }
-  const asset = registryAsset(expectedNetwork);
-  if (checksumAddress(req.asset, "asset address") !== getAddress(asset.address)) {
+  // `@x402/evm` >= 2.23.0 renamed the registry entry's token field `address` -> `asset`
+  // (DefaultAsset.asset: "Asset id as advertised in payment requirements" — the token's 0x
+  // address on EVM). Same value, new name; compared checksummed against the challenge's asset.
+  const canonical = registryAsset(expectedNetwork);
+  if (checksumAddress(req.asset, "asset address") !== getAddress(canonical.asset)) {
     throw new AgentXError(
       `payment challenge asset "${req.asset}" is not the canonical USDC for ${expectedNetwork}`,
       "asset_mismatch",
