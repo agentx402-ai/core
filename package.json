@@ -64,10 +64,10 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.6",
     "@types/node": "^20.0.0",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-v8": "^4.1.11",
     "tsup": "^8.3.0",
     "typescript": "^5.6.0",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "esbuild": "^0.28.1",
